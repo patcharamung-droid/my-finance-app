@@ -11,19 +11,20 @@ st.title("📊 My Finance Dashboard")
 url = "https://docs.google.com/spreadsheets/d/1ClxM35IaY617QQ_2-RqRZR9dvq7r5SR7zjwU_rN55Us/edit?gid=0#gid=0"
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# ดึงข้อมูล (ตั้งค่า ttl=0 เพื่อให้ดึงใหม่ทุกครั้งที่รีเฟรช)
+# ดึงข้อมูล
 df = conn.read(spreadsheet=url, ttl=0)
 
 if not df.empty:
-    # 1. ลบแถวที่ไม่มีข้อมูลออกก่อน (ป้องกัน ValueError)
+    # --- ส่วนการจัดการข้อมูล (Data Cleaning) ---
     df = df.dropna(subset=['Date', 'Amount'])
-    
-    # 2. แปลงวันที่แบบถนอมอาหาร (errors='coerce' จะเปลี่ยนค่าที่เสียเป็น NaT แทนที่จะพัง)
     df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
-    df = df.dropna(subset=['Date']) # ลบแถวที่วันที่ผิดเพี้ยนออก
-    
-    # 3. แปลงจำนวนเงินให้เป็นตัวเลขแน่นอน
+    df = df.dropna(subset=['Date'])
     df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce').fillna(0)
+
+    # --- ส่วนที่ต้องเพิ่ม: คำนวณค่าต่างๆ ก่อนนำไปแสดงผล ---
+    total_income = df[df['Type'] == 'Income']['Amount'].sum()
+    total_expense = df[df['Type'] == 'Expense']['Amount'].sum()
+    balance = total_income - total_expense
 
     # --- ส่วนที่ 1: ตัวเลขสรุป (Metrics) ---
     col1, col2, col3 = st.columns(3)
@@ -37,7 +38,7 @@ if not df.empty:
     c1, c2 = st.columns(2)
 
     with c1:
-        st.subheader("支出分佈 (Expense Distribution)")
+        st.subheader("Expense Distribution")
         expense_df = df[df['Type'] == 'Expense']
         if not expense_df.empty:
             category_sum = expense_df.groupby('Category')['Amount'].sum()
@@ -49,8 +50,8 @@ if not df.empty:
 
     with c2:
         st.subheader("Daily Spending Trend")
-        daily_trend = expense_df.groupby('Date')['Amount'].sum().reset_index()
-        if not daily_trend.empty:
+        if not expense_df.empty:
+            daily_trend = expense_df.groupby('Date')['Amount'].sum().reset_index()
             st.line_chart(daily_trend.set_index('Date'))
         else:
             st.info("Add more data to see trends.")
