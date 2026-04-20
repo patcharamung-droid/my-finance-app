@@ -15,11 +15,15 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 df = conn.read(spreadsheet=url, ttl=0)
 
 if not df.empty:
-    # เตรียมข้อมูลสำหรับ Dashboard
-    df['Date'] = pd.to_datetime(df['Date'])
-    total_income = df[df['Type'] == 'Income']['Amount'].sum()
-    total_expense = df[df['Type'] == 'Expense']['Amount'].sum()
-    balance = total_income - total_expense
+    # 1. ลบแถวที่ไม่มีข้อมูลออกก่อน (ป้องกัน ValueError)
+    df = df.dropna(subset=['Date', 'Amount'])
+    
+    # 2. แปลงวันที่แบบถนอมอาหาร (errors='coerce' จะเปลี่ยนค่าที่เสียเป็น NaT แทนที่จะพัง)
+    df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+    df = df.dropna(subset=['Date']) # ลบแถวที่วันที่ผิดเพี้ยนออก
+    
+    # 3. แปลงจำนวนเงินให้เป็นตัวเลขแน่นอน
+    df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce').fillna(0)
 
     # --- ส่วนที่ 1: ตัวเลขสรุป (Metrics) ---
     col1, col2, col3 = st.columns(3)
