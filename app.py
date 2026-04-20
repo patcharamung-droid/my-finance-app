@@ -74,7 +74,8 @@ with st.sidebar:
             'Type': t_type, 
             'Category': category, 
             'Amount': amount, 
-            'Note': note
+            'Note': note,
+            conn.update(spreadsheet=url, data=updated_df)
         }])
         updated_df = pd.concat([df, new_row], ignore_index=True) if not df.empty else new_row
         conn.update(spreadsheet=url, data=updated_df)
