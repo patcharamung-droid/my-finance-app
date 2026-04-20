@@ -1,20 +1,20 @@
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
 import pandas as pd
-import matplotlib.pyplot as plt
 from datetime import datetime
 
 st.set_page_config(page_title="My Finance", layout="wide")
+st.title("💰 ระบบบริหารการเงินส่วนตัว (Live)")
 
-st.title("💰 ระบบบริหารการเงินส่วนตัว")
+# 1. เชื่อมต่อกับ Google Sheets
+# ใส่ URL ของชีตคุณตรงนี้
+url = "1ClxM35IaY617QQ_2-RqRZR9dvq7r5SR7zjwU_rN55Us"
+conn = st.connection("gsheets", type=GSheetsConnection)
 
-# สำหรับการบันทึกข้อมูลบน Cloud เราจะใช้การแสดงผลตารางให้ก๊อปปี้ไปวางใน Excel/Sheet ก่อน
-# เพราะการเชื่อมต่อ Google Sheets แบบเขียนข้อมูลลงไปได้ทันทีต้องใช้คีย์ความลับ (Secrets) 
-# ซึ่งเราจะทำเป็นขั้นถัดไปหลังจากแอปออนไลน์แล้วครับ
+# 2. ดึงข้อมูลมาแสดง
+df = conn.read(spreadsheet=url)
 
-if 'data' not in st.session_state:
-    st.session_state.data = pd.DataFrame(columns=['Date', 'Type', 'Category', 'Amount', 'Note'])
-
-# ส่วนเพิ่มข้อมูล
+# 3. ส่วนเพิ่มข้อมูล (Sidebar)
 with st.sidebar:
     st.header("➕ เพิ่มรายการ")
     t_type = st.selectbox("ประเภท", ["Income", "Expense"])
@@ -23,23 +23,23 @@ with st.sidebar:
     note = st.text_input("รายละเอียด")
     
     if st.button("บันทึก"):
-        new_row = {'Date': datetime.now().strftime("%Y-%m-%d"), 'Type': t_type, 
-                    'Category': category, 'Amount': amount, 'Note': note}
-        st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
-        st.success("บันทึกชั่วคราวสำเร็จ!")
+        new_row = pd.DataFrame([{
+            'Date': datetime.now().strftime("%Y-%m-%d"),
+            'Type': t_type, 
+            'Category': category, 
+            'Amount': amount, 
+            'Note': note
+        }])
+        # รวมข้อมูลเก่ากับใหม่
+        updated_df = pd.concat([df, new_row], ignore_index=True)
+        # เขียนกลับลงไปใน Google Sheets
+        conn.update(spreadsheet=url, data=updated_df)
+        st.success("บันทึกข้อมูลลง Google Sheet เรียบร้อย!")
+        st.rerun()
 
-# สรุปยอด
-df = st.session_state.data
+# 4. แสดงผล Dashboard
 if not df.empty:
-    income = df[df['Type'] == 'Income']['Amount'].sum()
-    expense = df[df['Type'] == 'Expense']['Amount'].sum()
-    
-    c1, c2, c3 = st.columns(3)
-    c1.metric("รายรับ", f"{income:,.2f}")
-    c2.metric("รายจ่าย", f"{expense:,.2f}")
-    c3.metric("คงเหลือ", f"{income-expense:,.2f}")
-
-    st.write("### 📋 รายการทั้งหมด")
-    st.dataframe(df)
+    st.write("### 📊 รายการล่าสุด")
+    st.dataframe(df.sort_index(ascending=False), use_container_width=True)
 else:
-    st.info("ยังไม่มีข้อมูลบันทึกในเซสชั่นนี้")
+    st.info("ยังไม่มีข้อมูลในระบบ")
