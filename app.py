@@ -9,7 +9,7 @@ st.set_page_config(page_title="My Finance Fixed", layout="wide")
 st.title("💰 ระบบบันทึกรายรับ-รายจ่าย (ฉบับแก้ไข)")
 
 # 1. เชื่อมต่อ Google Sheets
-url = "https://docs.google.com/spreadsheets/d/1ClxM35IaY617QQ_2-RqRZR9dvq7r5SR7zjwU_rN55Us/edit?gid=0#gid=0"
+url = "ใส่_URL_ของ_GOOGLE_SHEET_คุณที่นี่"
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # 2. ฟังก์ชันดึงข้อมูลแบบ Real-time (บังคับไม่ใช้ Cache)
@@ -48,6 +48,37 @@ if df is not None and not df.empty:
         # จัดกลุ่มตามวันที่และรวมยอดเงิน
         daily_trend = exp_df.groupby('Date')['Amount'].sum()
         st.line_chart(daily_trend)
+    
+    # คำนวณยอดสรุป
+    income = df[df['Type'] == 'Income']['Amount'].sum()
+    expense = df[df['Type'] == 'Expense']['Amount'].sum()
+    balance = income - expense
+
+    # แสดง Metric
+    c1, c2, c3 = st.columns(3)
+    c1.metric("รายรับทั้งหมด", f"฿{income:,.2f}")
+    c2.metric("รายจ่ายทั้งหมด", f"฿{expense:,.2f}")
+    c3.metric("คงเหลือสุทธิ", f"฿{balance:,.2f}")
+
+    st.write("---")
+    
+    # แสดงกราฟ
+    col_l, col_r = st.columns(2)
+    with col_l:
+        st.subheader("📊 สัดส่วนรายจ่าย")
+        exp_df = df[df['Type'] == 'Expense']
+        if not exp_df.empty:
+            cat_sum = exp_df.groupby('Category')['Amount'].sum()
+            fig, ax = plt.subplots()
+            ax.pie(cat_sum, labels=cat_sum.index, autopct='%1.1f%%', startangle=90)
+            st.pyplot(fig)
+    with col_r:
+        st.subheader("📈 แนวโน้มรายวัน")
+        if not exp_df.empty:
+            daily = exp_df.groupby('Date')['Amount'].sum()
+            st.line_chart(daily)
+else:
+    st.info("ยังไม่มีข้อมูลในระบบ หรือชื่อคอลัมน์ไม่ถูกต้อง (Date, Type, Category, Amount, Note)")
 
 # --- ส่วนที่ 2: บันทึกข้อมูล (Sidebar) ---
 with st.sidebar:
