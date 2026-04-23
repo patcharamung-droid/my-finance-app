@@ -2,3 +2,4 @@ streamlit
 pandas
 st-gsheets-connection
 matplotlib
+google-generativeai
