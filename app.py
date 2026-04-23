@@ -101,3 +101,24 @@ st.write("### 📋 ประวัติรายการล่าสุด")
 if df is not None and not df.empty:
     # เรียงตามวันที่ล่าสุดขึ้นก่อน
     st.dataframe(df.sort_values(by='Date', ascending=False), use_container_width=True)
+
+# --- 1. เพิ่มตัวกรองเดือนใน Sidebar ---
+st.sidebar.write("---")
+st.sidebar.subheader("🔍 กรองข้อมูลตามเดือน")
+df['Month'] = pd.to_datetime(df['Date']).dt.strftime('%Y-%m')
+month_list = sorted(df['Month'].unique(), reverse=True)
+selected_month = st.sidebar.selectbox("เลือกเดือน", ["ทั้งหมด"] + month_list)
+
+if selected_month != "ทั้งหมด":
+    display_df = df[df['Month'] == selected_month]
+else:
+    display_df = df
+
+# --- 2. เพิ่ม Progress Bar สำหรับงบประมาณ (Budget) ---
+st.write("### 🎯 งบประมาณเดือนนี้")
+monthly_budget = 15000  # คุณสามารถเปลี่ยนเลขนี้ หรือทำช่องให้กรอกได้
+current_expense = display_df[display_df['Type'] == 'Expense']['Amount'].sum()
+percent = min(current_expense / monthly_budget, 1.0)
+
+st.progress(percent)
+st.write(f"ใช้ไปแล้ว {percent*100:.1f}% จากงบ ฿{monthly_budget:,.0f}")
