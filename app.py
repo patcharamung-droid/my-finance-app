@@ -20,41 +20,34 @@ df = get_data()
 
 # --- ส่วนที่ 1: Dashboard (จะแสดงเมื่อมีข้อมูล) ---
 if df is not None and not df.empty:
-    # คลีนข้อมูล (ลบแถวว่าง/แปลงชนิดข้อมูล)
+    # 1. ลบแถวที่ไม่มีข้อมูลวันที่หรือจำนวนเงินออกก่อน
     df = df.dropna(subset=['Date', 'Amount'])
-    df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
-    df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce').fillna(0)
     
-    # คำนวณยอดสรุป
+    # 2. แปลงวันที่ให้เป็นรูปแบบ Datetime ของ Python (หัวใจสำคัญ)
+    # errors='coerce' จะช่วยให้ถ้าเจอข้อมูลวันที่ผิดรูปแบบ มันจะไม่พังแต่จะข้ามไปแทน
+    df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+    
+    # 3. ลบแถวที่แปลงวันที่ไม่สำเร็จออก
+    df = df.dropna(subset=['Date'])
+    
+    # 4. แปลงวันที่เป็น "วันที่อย่างเดียว" (ไม่มีเวลามาพ่วง) เพื่อให้กราฟรวมกลุ่มได้ง่าย
+    df['Date'] = df['Date'].dt.date 
+    
+    # 5. แปลงจำนวนเงินให้เป็นตัวเลข
+    df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce').fillna(0)
+
+    # --- ส่วนแสดงผล Dashboard ---
+    # (ใช้ df ที่ผ่านการ Clean ด้านบนไปคำนวณต่อ)
     income = df[df['Type'] == 'Income']['Amount'].sum()
     expense = df[df['Type'] == 'Expense']['Amount'].sum()
-    balance = income - expense
-
-    # แสดง Metric
-    c1, c2, c3 = st.columns(3)
-    c1.metric("รายรับทั้งหมด", f"฿{income:,.2f}")
-    c2.metric("รายจ่ายทั้งหมด", f"฿{expense:,.2f}")
-    c3.metric("คงเหลือสุทธิ", f"฿{balance:,.2f}")
-
-    st.write("---")
     
-    # แสดงกราฟ
-    col_l, col_r = st.columns(2)
-    with col_l:
-        st.subheader("📊 สัดส่วนรายจ่าย")
-        exp_df = df[df['Type'] == 'Expense']
-        if not exp_df.empty:
-            cat_sum = exp_df.groupby('Category')['Amount'].sum()
-            fig, ax = plt.subplots()
-            ax.pie(cat_sum, labels=cat_sum.index, autopct='%1.1f%%', startangle=90)
-            st.pyplot(fig)
-    with col_r:
-        st.subheader("📈 แนวโน้มรายวัน")
-        if not exp_df.empty:
-            daily = exp_df.groupby('Date')['Amount'].sum()
-            st.line_chart(daily)
-else:
-    st.info("ยังไม่มีข้อมูลในระบบ หรือชื่อคอลัมน์ไม่ถูกต้อง (Date, Type, Category, Amount, Note)")
+    # กราฟแนวโน้มรายวัน (Daily Trend)
+    st.subheader("📈 แนวโน้มการใช้เงินรายวัน")
+    exp_df = df[df['Type'] == 'Expense']
+    if not exp_df.empty:
+        # จัดกลุ่มตามวันที่และรวมยอดเงิน
+        daily_trend = exp_df.groupby('Date')['Amount'].sum()
+        st.line_chart(daily_trend)
 
 # --- ส่วนที่ 2: บันทึกข้อมูล (Sidebar) ---
 with st.sidebar:
