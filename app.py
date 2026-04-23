@@ -3,122 +3,84 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
+import google.generativeai as genai
 
-# ตั้งค่าหน้าจอ
-st.set_page_config(page_title="My Finance Fixed", layout="wide")
-st.title("💰 ระบบบันทึกรายรับ-รายจ่าย (Complete)")
+# --- 1. ตั้งค่าหน้าจอและ AI ---
+st.set_page_config(page_title="AI Smart Finance", layout="wide")
+st.title("💰 AI Personal Finance Dashboard")
 
-# 1. เชื่อมต่อ Google Sheets
+if "GEMINI_API_KEY" in st.secrets:
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+    model = genai.GenerativeModel('gemini-1.5-flash')
+else:
+    st.error("กรุณาตั้งค่า GEMINI_API_KEY ใน Streamlit Secrets")
+
+# --- 2. เชื่อมต่อ Google Sheets ---
 url = "https://docs.google.com/spreadsheets/d/1ClxM35IaY617QQ_2-RqRZR9dvq7r5SR7zjwU_rN55Us/edit?gid=0#gid=0"
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 2. ฟังก์ชันดึงข้อมูลและคลีนข้อมูลในตัวเดียว
 def get_data():
     raw_df = conn.read(spreadsheet=url, ttl=0)
     if raw_df is not None and not raw_df.empty:
-        # ลบแถวว่างและจัดการวันที่/ตัวเลขทันที
         raw_df = raw_df.dropna(subset=['Date', 'Amount'])
         raw_df['Date'] = pd.to_datetime(raw_df['Date'], errors='coerce')
         raw_df = raw_df.dropna(subset=['Date'])
-        raw_df['Date'] = raw_df['Date'].dt.date # แปลงเป็นวันที่อย่างเดียว
         raw_df['Amount'] = pd.to_numeric(raw_df['Amount'], errors='coerce').fillna(0)
     return raw_df
 
 df = get_data()
 
-# --- ส่วนที่ 1: Dashboard ---
+# --- 3. แสดงผล Dashboard ---
 if df is not None and not df.empty:
-    # คำนวณยอดสรุป
     income = df[df['Type'] == 'Income']['Amount'].sum()
     expense = df[df['Type'] == 'Expense']['Amount'].sum()
     balance = income - expense
 
-    # แสดง Metric (ตัวเลขสรุปด้านบน)
     c1, c2, c3 = st.columns(3)
-    c1.metric("รายรับทั้งหมด", f"฿{income:,.2f}")
-    c2.metric("รายจ่ายทั้งหมด", f"฿{expense:,.2f}", delta=f"-{expense:,.2f}", delta_color="inverse")
-    c3.metric("คงเหลือสุทธิ", f"฿{balance:,.2f}")
+    c1.metric("รายรับรวม", f"฿{income:,.2f}")
+    c2.metric("รายจ่ายรวม", f"฿{expense:,.2f}", delta=f"-{expense:,.2f}", delta_color="inverse")
+    c3.metric("คงเหลือ", f"฿{balance:,.2f}")
 
-    st.write("---")
-    
-    # แสดงกราฟ
+    # กราฟ
     col_l, col_r = st.columns(2)
     with col_l:
-        st.subheader("📊 สัดส่วนรายจ่ายตามหมวดหมู่")
+        st.subheader("📊 สัดส่วนรายจ่าย")
         exp_df = df[df['Type'] == 'Expense']
         if not exp_df.empty:
             cat_sum = exp_df.groupby('Category')['Amount'].sum()
-            fig, ax = plt.subplots(figsize=(6, 4))
+            fig, ax = plt.subplots()
             ax.pie(cat_sum, labels=cat_sum.index, autopct='%1.1f%%', startangle=90)
             st.pyplot(fig)
-        else:
-            st.info("ยังไม่มีข้อมูลรายจ่าย")
-
     with col_r:
-        st.subheader("📈 แนวโน้มการใช้เงินรายวัน")
+        st.subheader("📈 แนวโน้มรายวัน")
         if not exp_df.empty:
-            # รวมยอดรายวันเพื่อลากกราฟเส้น
-            daily_trend = exp_df.groupby('Date')['Amount'].sum()
-            st.line_chart(daily_trend)
-        else:
-            st.info("เพิ่มข้อมูลเพื่อดูแนวโน้ม")
-else:
-    st.info("💡 ยินดีต้อนรับ! เริ่มบันทึกรายการแรกได้ที่แถบด้านข้างครับ")
+            daily = exp_df.groupby('Date')['Amount'].sum()
+            st.line_chart(daily)
 
-# --- ส่วนที่ 2: บันทึกข้อมูล (Sidebar) ---
+    # --- 🤖 ฟีเจอร์ AI Advisor ---
+    st.write("---")
+    if st.button("✨ ให้ Gemini วิเคราะห์การเงินเดือนนี้"):
+        with st.spinner('Gemini กำลังอ่านข้อมูล...'):
+            cat_summary = exp_df.groupby('Category')['Amount'].sum().to_dict()
+            prompt = f"รายรับ {income}, รายจ่าย {expense}, แยกหมวดหมู่: {cat_summary}. ช่วยวิเคราะห์และแนะนำ 3 ข้อ สั้นๆ ง่ายๆ"
+            response = model.generate_content(prompt)
+            st.info(response.text)
+
+# --- 4. Sidebar เพิ่มข้อมูล ---
 with st.sidebar:
-    st.header("➕ เพิ่มรายการ")
+    st.header("➕ บันทึกรายการ")
     t_date = st.date_input("วันที่", datetime.now())
     t_type = st.selectbox("ประเภท", ["Income", "Expense"])
     t_cat = st.selectbox("หมวดหมู่", ["Food", "Travel", "Shopping", "Bills", "Salary", "Other"])
-    t_amt = st.number_input("จำนวนเงิน", min_value=0.0, step=100.0)
-    t_note = st.text_input("รายละเอียด")
+    t_amt = st.number_input("จำนวนเงิน", min_value=0.0)
     
     if st.button("บันทึกข้อมูล"):
-        # ดึงข้อมูลล่าสุดมาดูลูก่อนต่อท้าย (สำคัญป้องกันข้อมูลหาย)
         current_df = get_data()
-        
-        new_row = pd.DataFrame([{
-            'Date': t_date.strftime("%Y-%m-%d"),
-            'Type': t_type,
-            'Category': t_cat,
-            'Amount': t_amt,
-            'Note': t_note
-        }])
-        
-        if current_df is not None and not current_df.empty:
-            updated_df = pd.concat([current_df, new_row], ignore_index=True)
-        else:
-            updated_df = new_row
-            
+        new_row = pd.DataFrame([{'Date': t_date.strftime("%Y-%m-%d"), 'Type': t_type, 'Category': t_cat, 'Amount': t_amt}])
+        updated_df = pd.concat([current_df, new_row], ignore_index=True) if not current_df.empty else new_row
         conn.update(spreadsheet=url, data=updated_df)
-        st.success("✅ บันทึกเรียบร้อย!")
+        st.success("บันทึกแล้ว!")
         st.rerun()
 
-# --- ส่วนที่ 3: ประวัติรายการ ---
 st.write("---")
-st.write("### 📋 ประวัติรายการล่าสุด")
-if df is not None and not df.empty:
-    # เรียงตามวันที่ล่าสุดขึ้นก่อน
-    st.dataframe(df.sort_values(by='Date', ascending=False), use_container_width=True)
-
-# --- 1. เพิ่มตัวกรองเดือนใน Sidebar ---
-st.sidebar.write("---")
-st.sidebar.subheader("🔍 กรองข้อมูลตามเดือน")
-df['Month'] = pd.to_datetime(df['Date']).dt.strftime('%Y-%m')
-month_list = sorted(df['Month'].unique(), reverse=True)
-selected_month = st.sidebar.selectbox("เลือกเดือน", ["ทั้งหมด"] + month_list)
-
-if selected_month != "ทั้งหมด":
-    display_df = df[df['Month'] == selected_month]
-else:
-    display_df = df
-
-# --- 2. เพิ่ม Progress Bar สำหรับงบประมาณ (Budget) ---
-st.write("### 🎯 งบประมาณเดือนนี้")
-monthly_budget = 15000  # คุณสามารถเปลี่ยนเลขนี้ หรือทำช่องให้กรอกได้
-current_expense = display_df[display_df['Type'] == 'Expense']['Amount'].sum()
-percent = min(current_expense / monthly_budget, 1.0)
-
-st.progress(percent)
-st.write(f"ใช้ไปแล้ว {percent*100:.1f}% จากงบ ฿{monthly_budget:,.0f}")
+st.dataframe(df.sort_values(by='Date', ascending=False) if not df.empty else df, use_container_width=True)
