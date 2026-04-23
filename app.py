@@ -4,78 +4,92 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
 
-# --- การตั้งค่าหน้าเว็บ ---
-st.set_page_config(page_title="Personal Finance V2", layout="wide")
-st.title("💰 ระบบบันทึกรายรับ-รายจ่าย (Complete Version)")
+# ตั้งค่าหน้าจอ
+st.set_page_config(page_title="My Finance Fixed", layout="wide")
+st.title("💰 ระบบบันทึกรายรับ-รายจ่าย (ฉบับแก้ไข)")
 
-# --- 1. เชื่อมต่อฐานข้อมูล ---
+# 1. เชื่อมต่อ Google Sheets
 url = "ใส่_URL_ของ_GOOGLE_SHEET_คุณที่นี่"
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# ดึงข้อมูลใหม่ล่าสุดเสมอ (ttl=0)
-df = conn.read(spreadsheet=url, ttl=0)
+# 2. ฟังก์ชันดึงข้อมูลแบบ Real-time (บังคับไม่ใช้ Cache)
+def get_data():
+    return conn.read(spreadsheet=url, ttl=0)
 
-# --- 2. ส่วนการคำนวณ (Processing) ---
+df = get_data()
+
+# --- ส่วนที่ 1: Dashboard (จะแสดงเมื่อมีข้อมูล) ---
 if df is not None and not df.empty:
-    # คลีนข้อมูล
+    # คลีนข้อมูล (ลบแถวว่าง/แปลงชนิดข้อมูล)
     df = df.dropna(subset=['Date', 'Amount'])
     df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
     df['Amount'] = pd.to_numeric(df['Amount'], errors='coerce').fillna(0)
-    df = df.dropna(subset=['Date'])
+    
+    # คำนวณยอดสรุป
+    income = df[df['Type'] == 'Income']['Amount'].sum()
+    expense = df[df['Type'] == 'Expense']['Amount'].sum()
+    balance = income - expense
 
-    # คำนวณยอด
-    total_income = df[df['Type'] == 'Income']['Amount'].sum()
-    total_expense = df[df['Type'] == 'Expense']['Amount'].sum()
-    balance = total_income - total_expense
-
-    # --- 3. ส่วนการแสดงผล (Dashboard) ---
+    # แสดง Metric
     c1, c2, c3 = st.columns(3)
-    c1.metric("รายรับทั้งหมด", f"฿{total_income:,.2f}")
-    c2.metric("รายจ่ายทั้งหมด", f"฿{total_expense:,.2f}", delta=f"-{total_expense:,.2f}", delta_color="inverse")
+    c1.metric("รายรับทั้งหมด", f"฿{income:,.2f}")
+    c2.metric("รายจ่ายทั้งหมด", f"฿{expense:,.2f}")
     c3.metric("คงเหลือสุทธิ", f"฿{balance:,.2f}")
 
     st.write("---")
     
-    col_left, col_right = st.columns(2)
-    with col_left:
+    # แสดงกราฟ
+    col_l, col_r = st.columns(2)
+    with col_l:
         st.subheader("📊 สัดส่วนรายจ่าย")
         exp_df = df[df['Type'] == 'Expense']
         if not exp_df.empty:
-            cat_data = exp_df.groupby('Category')['Amount'].sum()
+            cat_sum = exp_df.groupby('Category')['Amount'].sum()
             fig, ax = plt.subplots()
-            ax.pie(cat_data, labels=cat_data.index, autopct='%1.1f%%', startangle=90)
+            ax.pie(cat_sum, labels=cat_sum.index, autopct='%1.1f%%', startangle=90)
             st.pyplot(fig)
-            
-    with col_right:
-        st.subheader("📈 แนวโน้มการใช้เงิน")
+    with col_r:
+        st.subheader("📈 แนวโน้มรายวัน")
         if not exp_df.empty:
             daily = exp_df.groupby('Date')['Amount'].sum()
             st.line_chart(daily)
 else:
-    st.info("💡 เริ่มต้นใช้งานโดยการเพิ่มข้อมูลที่แถบด้านข้าง")
+    st.info("ยังไม่มีข้อมูลในระบบ หรือชื่อคอลัมน์ไม่ถูกต้อง (Date, Type, Category, Amount, Note)")
 
-# --- 4. ส่วนการรับข้อมูล (Input Sidebar) ---
+# --- ส่วนที่ 2: บันทึกข้อมูล (Sidebar) ---
 with st.sidebar:
-    st.header("➕ เพิ่มรายการใหม่")
+    st.header("➕ เพิ่มรายการ")
     t_date = st.date_input("วันที่", datetime.now())
     t_type = st.selectbox("ประเภท", ["Income", "Expense"])
-    t_cat = st.selectbox("หมวดหมู่", ["Food", "Travel", "Shopping", "Bills", "Salary", "Gift", "Other"])
-    t_amt = st.number_input("จำนวนเงิน", min_value=0.0, step=100.0)
+    t_cat = st.selectbox("หมวดหมู่", ["Food", "Travel", "Shopping", "Bills", "Salary", "Other"])
+    t_amt = st.number_input("จำนวนเงิน", min_value=0.0)
     t_note = st.text_input("รายละเอียด")
     
     if st.button("บันทึกข้อมูล"):
-        new_data = pd.DataFrame([{
+        # *** ขั้นตอนสำคัญ: ดึงข้อมูลล่าสุดจากชีตมาเก็บไว้ในตัวแปรอีกครั้งก่อนบันทึก ***
+        current_df = get_data()
+        
+        new_row = pd.DataFrame([{
             'Date': t_date.strftime("%Y-%m-%d"),
             'Type': t_type,
             'Category': t_cat,
             'Amount': t_amt,
             'Note': t_note
         }])
-        updated_df = pd.concat([df, new_data], ignore_index=True) if not df.empty else new_data
+        
+        # รวมข้อมูลเก่า + ข้อมูลใหม่ (ป้องกันข้อมูลเดิมหาย)
+        if current_df is not None and not current_df.empty:
+            updated_df = pd.concat([current_df, new_row], ignore_index=True)
+        else:
+            updated_df = new_row
+            
+        # ส่งกลับไปที่ Google Sheets
         conn.update(spreadsheet=url, data=updated_df)
+        
         st.success("บันทึกเรียบร้อย!")
+        # บังคับรีเฟรชหน้าจอทันที
         st.rerun()
 
 st.write("---")
-st.write("### 📋 ประวัติรายการ")
-st.dataframe(df.sort_values(by='Date', ascending=False) if not df.empty else df, use_container_width=True)
+st.write("### 📋 ประวัติรายการล่าสุด")
+st.dataframe(df.sort_index(ascending=False) if not df.empty else df, use_container_width=True)
