@@ -8,7 +8,18 @@ import google.generativeai as genai
 # --- 1. การตั้งค่าหน้าจอและ AI ---
 st.set_page_config(page_title="Smart Finance AI", layout="wide", page_icon="🤖")
 st.title("💰 ระบบบันทึกรายรับ-รายจ่าย (AI Powered)")
-
+# --- ส่วนที่ AI ช่วยเลือกหมวดหมู่ ---
+suggested_cat = "Other" # ค่าเริ่มต้นถ้า AI พัง
+if model and t_note:
+    try:
+        with st.spinner('AI กำลังวิเคราะห์หมวดหมู่...'):
+            cat_prompt = f"เลือกหมวดหมู่ที่เหมาะสมที่สุด 1 คำจากรายการนี้: Food, Travel, Shopping, Bills, Salary, Other จากข้อความ: '{t_note}' ตอบแค่คำเดียว"
+            cat_res = model.generate_content(cat_prompt)
+            suggested_cat = cat_res.text.strip()
+    except Exception as e:
+        # ถ้า AI มีปัญหา ให้แสดงคำเตือนสั้นๆ แต่ไม่ทำให้แอปหยุดทำงาน
+        st.sidebar.warning(f"AI Assistant ขัดข้องชั่วคราว: {e}")
+        suggested_cat = "Other"
 # ตรวจสอบการเชื่อมต่อ Gemini
 if "GEMINI_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
