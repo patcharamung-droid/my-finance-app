@@ -9,25 +9,18 @@ import google.generativeai as genai
 st.set_page_config(page_title="Smart Finance AI", layout="wide", page_icon="🤖")
 st.title("💰 ระบบบันทึกรายรับ-รายจ่าย (AI Powered)")
 
-# --- 2. ตั้งค่า AI Gemini ---
+# --- 2. ตั้งค่า AI Gemini (อัปเดตเป็นรุ่น 2.5 ตามที่คุณตรวจพบ) ---
 model = None
 if "GEMINI_API_KEY" in st.secrets:
     try:
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
         
-        # แสดงรายการ Model ที่ใช้ได้ใน Sidebar (เฉพาะเพื่อการตรวจสอบ)
-        with st.sidebar.expander("🛠 AI Debug Info"):
-            available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-            st.write("Models available:", available_models)
-
-        # ลองเรียกใช้งานรุ่นที่เสถียรที่สุด
-        try:
-            # ใช้ชื่อเต็มเพื่อความชัวร์ใน v0.5.0+
-            model = genai.GenerativeModel('models/gemini-1.5-flash')
-            # ทดสอบเรียกสั้นๆ 1 ครั้ง
-            model.generate_content("test")
-        except:
-            model = genai.GenerativeModel('models/gemini-pro')
+        # เลือกใช้รุ่น 2.5 Flash ที่คุณพบในลิสต์ (ตัวเลือก 0)
+        # รุ่นนี้ฉลาดกว่า 1.5 มากและรองรับภาษาไทยได้ดีขึ้น
+        model = genai.GenerativeModel('models/gemini-2.5-flash')
+        
+        # ทดสอบเรียกดูว่ารุ่นนี้พร้อมทำงานไหม
+        model.generate_content("test")
             
     except Exception as e:
         st.error(f"การตั้งค่าระบบ AI ล้มเหลว: {e}")
