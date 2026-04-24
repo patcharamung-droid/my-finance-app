@@ -4,28 +4,31 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
 import google.generativeai as genai
-import google.generativeai as genai
 
-genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-
-# ตรวจสอบรายชื่อโมเดลที่รองรับการสร้างข้อความ
-for m in genai.list_models():
-    if 'generateContent' in m.supported_generation_methods:
-        print(m.name)
 # --- 1. การตั้งค่าหน้าจอ ---
 st.set_page_config(page_title="Smart Finance AI", layout="wide", page_icon="🤖")
 st.title("💰 ระบบบันทึกรายรับ-รายจ่าย (AI Powered)")
 
-# --- 2. ตั้งค่า AI Gemini (แบบ Force Path) ---
+# --- 2. ตั้งค่า AI Gemini ---
 model = None
 if "GEMINI_API_KEY" in st.secrets:
     try:
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-        # ลองเรียกด้วย Path เต็ม และใช้รุ่นที่เสถียรที่สุดในไทยตอนนี้
-            try:
-                model = genai.GenerativeModel('gemini-1.5-flash')
-            except:
-                model = genai.GenerativeModel('gemini-pro')
+        
+        # แสดงรายการ Model ที่ใช้ได้ใน Sidebar (เฉพาะเพื่อการตรวจสอบ)
+        with st.sidebar.expander("🛠 AI Debug Info"):
+            available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+            st.write("Models available:", available_models)
+
+        # ลองเรียกใช้งานรุ่นที่เสถียรที่สุด
+        try:
+            # ใช้ชื่อเต็มเพื่อความชัวร์ใน v0.5.0+
+            model = genai.GenerativeModel('models/gemini-1.5-flash')
+            # ทดสอบเรียกสั้นๆ 1 ครั้ง
+            model.generate_content("test")
+        except:
+            model = genai.GenerativeModel('models/gemini-pro')
+            
     except Exception as e:
         st.error(f"การตั้งค่าระบบ AI ล้มเหลว: {e}")
 else:
@@ -52,7 +55,7 @@ def get_data():
 df = get_data()
 
 # --- 4. ส่วน Dashboard ---
-if not df.empty:
+if df is not None and not df.empty:
     income = df[df['Type'] == 'Income']['Amount'].sum()
     expense = df[df['Type'] == 'Expense']['Amount'].sum()
     balance = income - expense
@@ -62,7 +65,6 @@ if not df.empty:
     c2.metric("รายจ่ายทั้งหมด", f"฿{expense:,.2f}", delta=f"-{expense:,.2f}", delta_color="inverse")
     c3.metric("คงเหลือสุทธิ", f"฿{balance:,.2f}")
 
-    # --- AI Financial Insights ---
     st.write("---")
     if st.button("✨ ให้ AI ช่วยวิเคราะห์กระเป๋าเงินเดือนนี้"):
         if model:
@@ -70,13 +72,12 @@ if not df.empty:
                 try:
                     exp_df = df[df['Type'] == 'Expense']
                     cat_summary = exp_df.groupby('Category')['Amount'].sum().to_dict()
-                    prompt = f"วิเคราะห์ข้อมูลการเงินนี้: รายรับ {income}, รายจ่าย {expense}, รายจ่ายแยกหมวดหมู่ {cat_summary}. บอกข้อดี 1 ข้อ และสิ่งที่ต้องระวัง 1 ข้อ สั้นๆ"
+                    prompt = f"วิเคราะห์ข้อมูล: รายรับ {income}, รายจ่าย {expense}, รายจ่ายแยกหมวดหมู่ {cat_summary}. บอกข้อดี 1 ข้อ และสิ่งที่ต้องระวัง 1 ข้อ สั้นๆ"
                     response = model.generate_content(prompt)
                     st.info(response.text)
                 except Exception as e:
                     st.error(f"AI วิเคราะห์ไม่ได้: {e}")
 
-    # แสดงกราฟ
     col_l, col_r = st.columns(2)
     with col_l:
         st.subheader("📊 สัดส่วนรายจ่าย")
@@ -99,7 +100,6 @@ with st.sidebar:
     t_type = st.selectbox("ประเภท", ["Expense", "Income"])
     t_note = st.text_input("รายละเอียด (เช่น ซื้อข้าวกะเพรา)")
     
-    # --- AI Auto-Category ---
     suggested_cat = "Other"
     if model and t_note:
         with st.spinner('AI กำลังเลือกหมวดหมู่...'):
@@ -111,7 +111,11 @@ with st.sidebar:
                 suggested_cat = "Other"
 
     categories = ["Food", "Travel", "Shopping", "Bills", "Salary", "Other"]
-    default_index = categories.index(suggested_cat) if suggested_cat in categories else 5
+    # จัดการกรณี AI ตอบคำอื่นที่ไม่อยู่ใน List
+    if suggested_cat not in categories:
+        suggested_cat = "Other"
+        
+    default_index = categories.index(suggested_cat)
     t_cat = st.selectbox("หมวดหมู่ (AI แนะนำ)", categories, index=default_index)
     t_amt = st.number_input("จำนวนเงิน", min_value=0.0, step=100.0)
     
@@ -125,5 +129,5 @@ with st.sidebar:
 
 # --- 6. ประวัติรายการ ---
 st.write("---")
-if not df.empty:
+if df is not None and not df.empty:
     st.dataframe(df.sort_values(by='Date', ascending=False), use_container_width=True)
