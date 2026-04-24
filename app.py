@@ -4,7 +4,14 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
 import google.generativeai as genai
+import google.generativeai as genai
 
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+
+# ตรวจสอบรายชื่อโมเดลที่รองรับการสร้างข้อความ
+for m in genai.list_models():
+    if 'generateContent' in m.supported_generation_methods:
+        print(m.name)
 # --- 1. การตั้งค่าหน้าจอ ---
 st.set_page_config(page_title="Smart Finance AI", layout="wide", page_icon="🤖")
 st.title("💰 ระบบบันทึกรายรับ-รายจ่าย (AI Powered)")
@@ -15,10 +22,10 @@ if "GEMINI_API_KEY" in st.secrets:
     try:
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
         # ลองเรียกด้วย Path เต็ม และใช้รุ่นที่เสถียรที่สุดในไทยตอนนี้
-        try:
-            model = genai.GenerativeModel('models/gemini-1.5-flash-latest')
-        except:
-            model = genai.GenerativeModel('models/gemini-1.5-pro')
+            try:
+                model = genai.GenerativeModel('gemini-1.5-flash')
+            except:
+                model = genai.GenerativeModel('gemini-pro')
     except Exception as e:
         st.error(f"การตั้งค่าระบบ AI ล้มเหลว: {e}")
 else:
