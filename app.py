@@ -5,29 +5,23 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 import google.generativeai as genai
 
-# --- 1. การตั้งค่าหน้าจอและ AI ---
+# --- 1. การตั้งค่าหน้าจอ ---
 st.set_page_config(page_title="Smart Finance AI", layout="wide", page_icon="🤖")
 st.title("💰 ระบบบันทึกรายรับ-รายจ่าย (AI Powered)")
-# --- ส่วนที่ AI ช่วยเลือกหมวดหมู่ ---
-suggested_cat = "Other" # ค่าเริ่มต้นถ้า AI พัง
-if model and t_note:
-    try:
-        with st.spinner('AI กำลังวิเคราะห์หมวดหมู่...'):
-            cat_prompt = f"เลือกหมวดหมู่ที่เหมาะสมที่สุด 1 คำจากรายการนี้: Food, Travel, Shopping, Bills, Salary, Other จากข้อความ: '{t_note}' ตอบแค่คำเดียว"
-            cat_res = model.generate_content(cat_prompt)
-            suggested_cat = cat_res.text.strip()
-    except Exception as e:
-        # ถ้า AI มีปัญหา ให้แสดงคำเตือนสั้นๆ แต่ไม่ทำให้แอปหยุดทำงาน
-        st.sidebar.warning(f"AI Assistant ขัดข้องชั่วคราว: {e}")
-        suggested_cat = "Other"
-# ตรวจสอบการเชื่อมต่อ Gemini
-if "GEMINI_API_KEY" in st.secrets:
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    model = genai.GenerativeModel('gemini-pro')
-else:
-    st.error("❌ กรุณาตั้งค่า GEMINI_API_KEY ใน Streamlit Secrets")
 
-# --- 2. การเชื่อมต่อ Google Sheets ---
+# --- 2. ตั้งค่า AI Gemini (ต้องทำก่อนเรียกใช้ model) ---
+model = None
+if "GEMINI_API_KEY" in st.secrets:
+    try:
+        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+        # แนะนำให้ใช้ 'gemini-1.5-flash' เพราะเร็วกว่าและฉลาดกว่ารุ่นเก่าครับ
+        model = genai.GenerativeModel('gemini-1.5-flash')
+    except Exception as e:
+        st.error(f"การตั้งค่า AI ผิดพลาด: {e}")
+else:
+    st.warning("❌ กรุณาตั้งค่า GEMINI_API_KEY ใน Streamlit Secrets")
+
+# --- 3. การเชื่อมต่อ Google Sheets ---
 url = "https://docs.google.com/spreadsheets/d/1ClxM35IaY617QQ_2-RqRZR9dvq7r5SR7zjwU_rN55Us/edit?gid=0#gid=0"
 conn = st.connection("gsheets", type=GSheetsConnection)
 
@@ -43,8 +37,8 @@ def get_data():
 
 df = get_data()
 
-# --- 3. ส่วน Dashboard ---
-if not df.empty:
+# --- 4. ส่วน Dashboard ---
+if df is not None and not df.empty:
     income = df[df['Type'] == 'Income']['Amount'].sum()
     expense = df[df['Type'] == 'Expense']['Amount'].sum()
     balance = income - expense
@@ -54,18 +48,20 @@ if not df.empty:
     c2.metric("รายจ่ายทั้งหมด", f"฿{expense:,.2f}", delta=f"-{expense:,.2f}", delta_color="inverse")
     c3.metric("คงเหลือสุทธิ", f"฿{balance:,.2f}")
 
-    # --- 🤖 ส่วนที่เพิ่ม: AI Financial Insights ---
     st.write("---")
     if st.button("✨ ให้ AI ช่วยวิเคราะห์กระเป๋าเงินเดือนนี้"):
-        with st.spinner('Gemini กำลังวิเคราะห์ข้อมูลของคุณ...'):
-            exp_df = df[df['Type'] == 'Expense']
-            cat_summary = exp_df.groupby('Category')['Amount'].sum().to_dict()
-            prompt = f"""วิเคราะห์ข้อมูลการเงินนี้: รายรับ {income}, รายจ่าย {expense}, รายจ่ายแยกหมวดหมู่ {cat_summary}
-            บอกข้อดี 1 ข้อ และสิ่งที่ต้องระวัง 1 ข้อ สั้นๆ เป็นกันเอง"""
-            response = model.generate_content(prompt)
-            st.info(response.text)
+        if model:
+            with st.spinner('Gemini กำลังวิเคราะห์ข้อมูลของคุณ...'):
+                exp_df = df[df['Type'] == 'Expense']
+                cat_summary = exp_df.groupby('Category')['Amount'].sum().to_dict()
+                prompt = f"""วิเคราะห์ข้อมูลการเงินนี้: รายรับ {income}, รายจ่าย {expense}, รายจ่ายแยกหมวดหมู่ {cat_summary}
+                บอกข้อดี 1 ข้อ และสิ่งที่ต้องระวัง 1 ข้อ สั้นๆ เป็นกันเอง"""
+                try:
+                    response = model.generate_content(prompt)
+                    st.info(response.text)
+                except Exception as e:
+                    st.error(f"AI วิเคราะห์ไม่ได้: {e}")
 
-    # กราฟแสดงผล
     col_l, col_r = st.columns(2)
     with col_l:
         st.subheader("📊 สัดส่วนรายจ่าย")
@@ -81,26 +77,26 @@ if not df.empty:
             daily = exp_df.groupby('Date')['Amount'].sum()
             st.line_chart(daily)
 
-# --- 4. ส่วนบันทึกข้อมูล (Sidebar) ---
+# --- 5. ส่วนบันทึกข้อมูล (Sidebar) ---
 with st.sidebar:
     st.header("➕ บันทึกรายการใหม่")
     t_date = st.date_input("วันที่", datetime.now())
     t_type = st.selectbox("ประเภท", ["Expense", "Income"])
     t_note = st.text_input("รายละเอียด (เช่น ซื้อกะเพราไข่ดาว)")
     
-    # --- 🤖 ส่วนที่เพิ่ม: AI Auto-Category ---
     suggested_cat = "Other"
-    if t_note:
+    if model and t_note:
         with st.spinner('AI กำลังเลือกหมวดหมู่...'):
-            cat_prompt = f"จากข้อความ '{t_note}' ช่วยเลือกหมวดหมู่ที่เหมาะสมที่สุด 1 คำจากรายการนี้: Food, Travel, Shopping, Bills, Salary, Other ตอบแค่คำเดียวเท่านั้น"
-            cat_res = model.generate_content(cat_prompt)
-            suggested_cat = cat_res.text.strip()
+            try:
+                cat_prompt = f"จากข้อความ '{t_note}' ช่วยเลือกหมวดหมู่ที่เหมาะสมที่สุด 1 คำจากรายการนี้: Food, Travel, Shopping, Bills, Salary, Other ตอบแค่คำเดียวเท่านั้น"
+                cat_res = model.generate_content(cat_prompt)
+                suggested_cat = cat_res.text.strip()
+            except:
+                suggested_cat = "Other"
 
     categories = ["Food", "Travel", "Shopping", "Bills", "Salary", "Other"]
-    # ตั้งค่า Default ตามที่ AI แนะนำ
     default_index = categories.index(suggested_cat) if suggested_cat in categories else 5
-    t_cat = st.selectbox("หมวดหมู่ (AI แนะนำให้แล้ว)", categories, index=default_index)
-    
+    t_cat = st.selectbox("หมวดหมู่ (AI แนะนำ)", categories, index=default_index)
     t_amt = st.number_input("จำนวนเงิน", min_value=0.0, step=100.0)
     
     if st.button("บันทึกข้อมูล"):
@@ -111,7 +107,7 @@ with st.sidebar:
         st.success("บันทึกแล้ว!")
         st.rerun()
 
-# --- 5. ประวัติรายการ ---
+# --- 6. ประวัติรายการ ---
 st.write("---")
-if not df.empty:
+if df is not None and not df.empty:
     st.dataframe(df.sort_values(by='Date', ascending=False), use_container_width=True)
