@@ -28,7 +28,34 @@ def get_data():
 
 df = get_data()
 
-# --- 3. ส่วน Dashboard (เพิ่มเติมตารางสรุปยอด) ---
+# --- 3. ส่วน Dashboard ---
+if not df.empty:
+    income = df[df['Type'] == 'Income']['Amount'].sum()
+    expense = df[df['Type'] == 'Expense']['Amount'].sum()
+    balance = income - expense
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("รายรับทั้งหมด", f"฿{income:,.2f}")
+    c2.metric("รายจ่ายทั้งหมด", f"฿{expense:,.2f}", delta=f"-{expense:,.2f}", delta_color="inverse")
+    c3.metric("คงเหลือสุทธิ", f"฿{balance:,.2f}")
+
+    # กราฟแสดงผล
+    st.write("---")
+    col_l, col_r = st.columns(2)
+    with col_l:
+        st.subheader("📊 สัดส่วนรายจ่าย")
+        exp_df = df[df['Type'] == 'Expense']
+        if not exp_df.empty:
+            cat_sum = exp_df.groupby('Category')['Amount'].sum()
+            fig, ax = plt.subplots()
+            ax.pie(cat_sum, labels=cat_sum.index, autopct='%1.1f%%', startangle=90)
+            st.pyplot(fig)
+    with col_r:
+        st.subheader("📈 แนวโน้มรายวัน")
+        if not exp_df.empty:
+            daily = exp_df.groupby('Date')['Amount'].sum()
+            st.line_chart(daily)
+            # --- 3. ส่วน Dashboard (เพิ่มเติมตารางสรุปยอด) ---
 if not df.empty:
     income = df[df['Type'] == 'Income']['Amount'].sum()
     expense = df[df['Type'] == 'Expense']['Amount'].sum()
