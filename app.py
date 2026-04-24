@@ -9,13 +9,13 @@ import google.generativeai as genai
 st.set_page_config(page_title="Smart Finance AI", layout="wide", page_icon="🤖")
 st.title("💰 ระบบบันทึกรายรับ-รายจ่าย (AI Powered)")
 
-# --- 2. ตั้งค่า AI Gemini (ต้องทำก่อนเรียกใช้ model) ---
+# --- 2. ตั้งค่า AI Gemini (ใช้รุ่น 1.5-flash ตามที่คุณอัปเดต Library) ---
 model = None
-# --- ส่วนที่ถูกต้องควรเป็นแบบนี้ ---
 if "GEMINI_API_KEY" in st.secrets:
     try:
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-        model = genai.GenerativeModel('gemini-1.5-flash') # บรรทัดที่ 18 ต้องเยื้องเท่ากับบรรทัดบน
+        # ใช้รุ่นที่เสถียรที่สุดสำหรับเวอร์ชัน 0.5.0 ขึ้นไป
+        model = genai.GenerativeModel('gemini-1.5-flash')
     except Exception as e:
         st.error(f"การตั้งค่า AI ผิดพลาด: {e}")
 else:
@@ -26,19 +26,23 @@ url = "https://docs.google.com/spreadsheets/d/1ClxM35IaY617QQ_2-RqRZR9dvq7r5SR7z
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def get_data():
-    raw_df = conn.read(spreadsheet=url, ttl=0)
-    if raw_df is not None and not raw_df.empty:
-        raw_df = raw_df.dropna(subset=['Date', 'Amount'])
-        raw_df['Date'] = pd.to_datetime(raw_df['Date'], errors='coerce')
-        raw_df = raw_df.dropna(subset=['Date'])
-        raw_df['Date'] = raw_df['Date'].dt.date
-        raw_df['Amount'] = pd.to_numeric(raw_df['Amount'], errors='coerce').fillna(0)
-    return raw_df
+    try:
+        raw_df = conn.read(spreadsheet=url, ttl=0)
+        if raw_df is not None and not raw_df.empty:
+            raw_df = raw_df.dropna(subset=['Date', 'Amount'])
+            raw_df['Date'] = pd.to_datetime(raw_df['Date'], errors='coerce')
+            raw_df = raw_df.dropna(subset=['Date'])
+            raw_df['Date'] = raw_df['Date'].dt.date
+            raw_df['Amount'] = pd.to_numeric(raw_df['Amount'], errors='coerce').fillna(0)
+            return raw_df
+    except:
+        return pd.DataFrame()
+    return pd.DataFrame()
 
 df = get_data()
 
 # --- 4. ส่วน Dashboard ---
-if df is not None and not df.empty:
+if not df.empty:
     income = df[df['Type'] == 'Income']['Amount'].sum()
     expense = df[df['Type'] == 'Expense']['Amount'].sum()
     balance = income - expense
@@ -48,20 +52,21 @@ if df is not None and not df.empty:
     c2.metric("รายจ่ายทั้งหมด", f"฿{expense:,.2f}", delta=f"-{expense:,.2f}", delta_color="inverse")
     c3.metric("คงเหลือสุทธิ", f"฿{balance:,.2f}")
 
+    # --- AI Financial Insights ---
     st.write("---")
     if st.button("✨ ให้ AI ช่วยวิเคราะห์กระเป๋าเงินเดือนนี้"):
         if model:
             with st.spinner('Gemini กำลังวิเคราะห์ข้อมูลของคุณ...'):
-                exp_df = df[df['Type'] == 'Expense']
-                cat_summary = exp_df.groupby('Category')['Amount'].sum().to_dict()
-                prompt = f"""วิเคราะห์ข้อมูลการเงินนี้: รายรับ {income}, รายจ่าย {expense}, รายจ่ายแยกหมวดหมู่ {cat_summary}
-                บอกข้อดี 1 ข้อ และสิ่งที่ต้องระวัง 1 ข้อ สั้นๆ เป็นกันเอง"""
                 try:
+                    exp_df = df[df['Type'] == 'Expense']
+                    cat_summary = exp_df.groupby('Category')['Amount'].sum().to_dict()
+                    prompt = f"วิเคราะห์ข้อมูลการเงินนี้: รายรับ {income}, รายจ่าย {expense}, รายจ่ายแยกหมวดหมู่ {cat_summary}. บอกข้อดี 1 ข้อ และสิ่งที่ต้องระวัง 1 ข้อ สั้นๆ"
                     response = model.generate_content(prompt)
                     st.info(response.text)
                 except Exception as e:
                     st.error(f"AI วิเคราะห์ไม่ได้: {e}")
 
+    # แสดงกราฟ
     col_l, col_r = st.columns(2)
     with col_l:
         st.subheader("📊 สัดส่วนรายจ่าย")
@@ -82,13 +87,14 @@ with st.sidebar:
     st.header("➕ บันทึกรายการใหม่")
     t_date = st.date_input("วันที่", datetime.now())
     t_type = st.selectbox("ประเภท", ["Expense", "Income"])
-    t_note = st.text_input("รายละเอียด (เช่น ซื้อกะเพราไข่ดาว)")
+    t_note = st.text_input("รายละเอียด (เช่น ซื้อข้าวกะเพรา)")
     
+    # --- AI Auto-Category ---
     suggested_cat = "Other"
     if model and t_note:
         with st.spinner('AI กำลังเลือกหมวดหมู่...'):
             try:
-                cat_prompt = f"จากข้อความ '{t_note}' ช่วยเลือกหมวดหมู่ที่เหมาะสมที่สุด 1 คำจากรายการนี้: Food, Travel, Shopping, Bills, Salary, Other ตอบแค่คำเดียวเท่านั้น"
+                cat_prompt = f"จากข้อความ '{t_note}' เลือกหมวดหมู่ 1 คำจากรายการนี้: Food, Travel, Shopping, Bills, Salary, Other ตอบคำเดียวเท่านั้น"
                 cat_res = model.generate_content(cat_prompt)
                 suggested_cat = cat_res.text.strip()
             except:
@@ -104,10 +110,10 @@ with st.sidebar:
         new_row = pd.DataFrame([{'Date': t_date.strftime("%Y-%m-%d"), 'Type': t_type, 'Category': t_cat, 'Amount': t_amt, 'Note': t_note}])
         updated_df = pd.concat([current_df, new_row], ignore_index=True) if not current_df.empty else new_row
         conn.update(spreadsheet=url, data=updated_df)
-        st.success("บันทึกแล้ว!")
+        st.success("บันทึกเรียบร้อย!")
         st.rerun()
 
 # --- 6. ประวัติรายการ ---
 st.write("---")
-if df is not None and not df.empty:
+if not df.empty:
     st.dataframe(df.sort_values(by='Date', ascending=False), use_container_width=True)
