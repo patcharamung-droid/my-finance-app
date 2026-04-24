@@ -28,7 +28,7 @@ def get_data():
 
 df = get_data()
 
-# --- 3. ส่วน Dashboard ---
+# --- 3. ส่วน Dashboard (เพิ่มเติมตารางสรุปยอด) ---
 if not df.empty:
     income = df[df['Type'] == 'Income']['Amount'].sum()
     expense = df[df['Type'] == 'Expense']['Amount'].sum()
@@ -39,22 +39,24 @@ if not df.empty:
     c2.metric("รายจ่ายทั้งหมด", f"฿{expense:,.2f}", delta=f"-{expense:,.2f}", delta_color="inverse")
     c3.metric("คงเหลือสุทธิ", f"฿{balance:,.2f}")
 
-    # กราฟแสดงผล
-    st.write("---")
-    col_l, col_r = st.columns(2)
-    with col_l:
-        st.subheader("📊 สัดส่วนรายจ่าย")
-        exp_df = df[df['Type'] == 'Expense']
-        if not exp_df.empty:
-            cat_sum = exp_df.groupby('Category')['Amount'].sum()
-            fig, ax = plt.subplots()
-            ax.pie(cat_sum, labels=cat_sum.index, autopct='%1.1f%%', startangle=90)
-            st.pyplot(fig)
-    with col_r:
-        st.subheader("📈 แนวโน้มรายวัน")
-        if not exp_df.empty:
-            daily = exp_df.groupby('Date')['Amount'].sum()
-            st.line_chart(daily)
+    # --- ส่วนที่เพิ่มใหม่: ตารางสรุปยอดเงินแต่ละรายการ ---
+    st.write("### 📑 สรุปยอดเงินแยกตามหมวดหมู่")
+    
+    # แยกเฉพาะรายการที่เป็นรายจ่าย (Expense)
+    exp_df = df[df['Type'] == 'Expense']
+    
+    if not exp_df.empty:
+        # รวมยอดเงินแยกตามหมวดหมู่
+        category_summary = exp_df.groupby('Category')['Amount'].sum().reset_index()
+        # เปลี่ยนชื่อคอลัมน์ให้ดูง่าย
+        category_summary.columns = ['หมวดหมู่', 'ยอดเงินรวม (บาท)']
+        # เรียงลำดับจากมากไปน้อย
+        category_summary = category_summary.sort_values(by='ยอดเงินรวม (บาท)', ascending=False)
+        
+        # แสดงผลเป็นตารางใน Streamlit
+        st.table(category_summary.style.format({'ยอดเงินรวม (บาท)': '{:,.2f}'}))
+    else:
+        st.info("ยังไม่มีรายการรายจ่ายในขณะนี้")
 
 # --- 4. ส่วนบันทึกข้อมูล (Sidebar) ---
 with st.sidebar:
