@@ -124,3 +124,30 @@ with st.sidebar:
 st.write("---")
 if df is not None and not df.empty:
     st.dataframe(df.sort_values(by='Date', ascending=False), use_container_width=True)
+
+def send_line_messaging(message):
+    token = st.secrets.get("LINE_CHANNEL_ACCESS_TOKEN")
+    user_id = st.secrets.get("LINE_USER_ID")
+    
+    if not token or not user_id:
+        st.error("กรุณาตั้งค่า Channel Access Token และ User ID ใน Secrets")
+        return
+
+    url = "https://api.line.me/v2/bot/message/push"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {token}"
+    }
+    payload = {
+        "to": user_id,
+        "messages": [{"type": "text", "text": message}]
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=payload)
+        if response.status_code == 200:
+            st.success("ส่งข้อมูลผ่าน Messaging API สำเร็จ! 📱")
+        else:
+            st.error(f"Error: {response.text}")
+    except Exception as e:
+        st.error(f"เกิดข้อผิดพลาด: {e}")
