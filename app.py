@@ -15,7 +15,7 @@ model = None
 if "GEMINI_API_KEY" in st.secrets:
     try:
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-        model = genai.GenerativeModel('gemini-pro') # บรรทัดที่ 18 ต้องเยื้องเท่ากับบรรทัดบน
+        model = genai.GenerativeModel('gemini-1.5-flash') # บรรทัดที่ 18 ต้องเยื้องเท่ากับบรรทัดบน
     except Exception as e:
         st.error(f"การตั้งค่า AI ผิดพลาด: {e}")
 else:
