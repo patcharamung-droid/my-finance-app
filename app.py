@@ -65,14 +65,6 @@ if not filtered_df.empty:
     c2.metric("รายจ่าย (ตามตัวกรอง)", f"฿{expense:,.2f}")
     c3.metric("คงเหลือสุทธิ", f"฿{balance:,.2f}")
 
-    # ตารางสรุปยอดแยกตามหมวดหมู่ (เฉพาะที่กรอง)
-    st.write("### 📑 สรุปยอดเงินตามตัวกรอง")
-    exp_filtered = filtered_df[filtered_df['Type'] == 'Expense']
-    if not exp_filtered.empty:
-        cat_summary = exp_filtered.groupby('Category')['Amount'].sum().reset_index()
-        cat_summary.columns = ['หมวดหมู่', 'ยอดเงินรวม (บาท)']
-        st.table(cat_summary.sort_values(by='ยอดเงินรวม (บาท)', ascending=False).style.format({'ยอดเงินรวม (บาท)': '{:,.2f}'}))
-
     # กราฟวงกลมที่เปลี่ยนตามตัวกรอง
     st.write("---")
     col_l, col_r = st.columns(2)
