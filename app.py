@@ -15,7 +15,7 @@ if "GEMINI_API_KEY" in st.secrets:
     try:
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
         # ใช้รุ่นที่เสถียรที่สุดสำหรับเวอร์ชัน 0.5.0 ขึ้นไป
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('models/gemini-1.5-flash')
     except Exception as e:
         st.error(f"การตั้งค่า AI ผิดพลาด: {e}")
 else:
