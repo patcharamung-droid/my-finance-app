@@ -27,33 +27,66 @@ def get_data():
     return pd.DataFrame()
 
 df = get_data()
+# --- ส่วนตัวกรองข้อมูล (Sidebar Filters) ---
+with st.sidebar:
+    st.write("---")
+    st.header("🔍 ตัวกรองข้อมูล")
+    
+    # 1. กรองตามช่วงวันที่
+    if not df.empty:
+        min_date = min(df['Date'])
+        max_date = max(df['Date'])
+        start_date, end_date = st.date_input(
+            "เลือกช่วงเวลา",
+            value=(min_date, max_date),
+            min_value=min_date,
+            max_value=max_date
+        )
+        
+        # 2. กรองตามหมวดหมู่ (เลือกได้หลายหมวด)
+        all_cats = df['Category'].unique().tolist()
+        selected_cats = st.multiselect("เลือกหมวดหมู่", all_cats, default=all_cats)
+
+        # นำตัวกรองมาใช้กับ DataFrame
+        mask = (df['Date'] >= start_date) & (df['Date'] <= end_date) & (df['Category'].isin(selected_cats))
+        filtered_df = df.loc[mask]
+    else:
+        filtered_df = df
 
 # --- 3. ส่วน Dashboard ---
-if not df.empty:
-    income = df[df['Type'] == 'Income']['Amount'].sum()
-    expense = df[df['Type'] == 'Expense']['Amount'].sum()
+if not filtered_df.empty:
+    income = filtered_df[filtered_df['Type'] == 'Income']['Amount'].sum()
+    expense = filtered_df[filtered_df['Type'] == 'Expense']['Amount'].sum()
     balance = income - expense
 
+    # แสดง Metric ที่เปลี่ยนไปตามตัวกรอง
     c1, c2, c3 = st.columns(3)
-    c1.metric("รายรับทั้งหมด", f"฿{income:,.2f}")
-    c2.metric("รายจ่ายทั้งหมด", f"฿{expense:,.2f}", delta=f"-{expense:,.2f}", delta_color="inverse")
+    c1.metric("รายรับ (ตามตัวกรอง)", f"฿{income:,.2f}")
+    c2.metric("รายจ่าย (ตามตัวกรอง)", f"฿{expense:,.2f}")
     c3.metric("คงเหลือสุทธิ", f"฿{balance:,.2f}")
 
-    # กราฟแสดงผล
+    # ตารางสรุปยอดแยกตามหมวดหมู่ (เฉพาะที่กรอง)
+    st.write("### 📑 สรุปยอดเงินตามตัวกรอง")
+    exp_filtered = filtered_df[filtered_df['Type'] == 'Expense']
+    if not exp_filtered.empty:
+        cat_summary = exp_filtered.groupby('Category')['Amount'].sum().reset_index()
+        cat_summary.columns = ['หมวดหมู่', 'ยอดเงินรวม (บาท)']
+        st.table(cat_summary.sort_values(by='ยอดเงินรวม (บาท)', ascending=False).style.format({'ยอดเงินรวม (บาท)': '{:,.2f}'}))
+
+    # กราฟวงกลมที่เปลี่ยนตามตัวกรอง
     st.write("---")
     col_l, col_r = st.columns(2)
     with col_l:
         st.subheader("📊 สัดส่วนรายจ่าย")
-        exp_df = df[df['Type'] == 'Expense']
-        if not exp_df.empty:
-            cat_sum = exp_df.groupby('Category')['Amount'].sum()
+        if not exp_filtered.empty:
+            cat_sum = exp_filtered.groupby('Category')['Amount'].sum()
             fig, ax = plt.subplots()
             ax.pie(cat_sum, labels=cat_sum.index, autopct='%1.1f%%', startangle=90)
             st.pyplot(fig)
     with col_r:
         st.subheader("📈 แนวโน้มรายวัน")
-        if not exp_df.empty:
-            daily = exp_df.groupby('Date')['Amount'].sum()
+        if not exp_filtered.empty:
+            daily = exp_filtered.groupby('Date')['Amount'].sum()
             st.line_chart(daily)
 
     # --- ส่วนที่เพิ่มใหม่: ตารางสรุปยอดเงินแต่ละรายการ ---
@@ -109,3 +142,8 @@ with st.sidebar:
 st.write("---")
 if not df.empty:
     st.dataframe(df.sort_values(by='Date', ascending=False), use_container_width=True)
+
+# --- 6. ประวัติรายการ (แสดงเฉพาะที่กรอง) ---
+st.write("### 📜 ประวัติรายการที่เลือก")
+if not filtered_df.empty:
+    st.dataframe(filtered_df.sort_values(by='Date', ascending=False), use_container_width=True)
