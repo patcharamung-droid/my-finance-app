@@ -9,17 +9,20 @@ import google.generativeai as genai
 st.set_page_config(page_title="Smart Finance AI", layout="wide", page_icon="🤖")
 st.title("💰 ระบบบันทึกรายรับ-รายจ่าย (AI Powered)")
 
-# --- 2. ตั้งค่า AI Gemini (ใช้รุ่น 1.5-flash ตามที่คุณอัปเดต Library) ---
+# --- 2. ตั้งค่า AI Gemini (แบบ Force Path) ---
 model = None
 if "GEMINI_API_KEY" in st.secrets:
     try:
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-        # ใช้รุ่นที่เสถียรที่สุดสำหรับเวอร์ชัน 0.5.0 ขึ้นไป
-        model = genai.GenerativeModel('gemini-1.5-flash-latest')
+        # ลองเรียกด้วย Path เต็ม และใช้รุ่นที่เสถียรที่สุดในไทยตอนนี้
+        try:
+            model = genai.GenerativeModel('models/gemini-1.5-flash-latest')
+        except:
+            model = genai.GenerativeModel('models/gemini-1.5-pro')
     except Exception as e:
-        st.error(f"การตั้งค่า AI ผิดพลาด: {e}")
+        st.error(f"การตั้งค่าระบบ AI ล้มเหลว: {e}")
 else:
-    st.warning("❌ กรุณาตั้งค่า GEMINI_API_KEY ใน Streamlit Secrets")
+    st.warning("❌ ไม่พบ GEMINI_API_KEY ใน Secrets")
 
 # --- 3. การเชื่อมต่อ Google Sheets ---
 url = "https://docs.google.com/spreadsheets/d/1ClxM35IaY617QQ_2-RqRZR9dvq7r5SR7zjwU_rN55Us/edit?gid=0#gid=0"
