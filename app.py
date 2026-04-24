@@ -9,7 +9,7 @@ st.set_page_config(page_title="My Finance Fixed", layout="wide")
 st.title("💰 ระบบบันทึกรายรับ-รายจ่าย (Complete)")
 
 # 1. เชื่อมต่อ Google Sheets
-url = "ใส่_URL_ของ_GOOGLE_SHEET_คุณที่นี่"
+url = "https://docs.google.com/spreadsheets/d/1ClxM35IaY617QQ_2-RqRZR9dvq7r5SR7zjwU_rN55Us/edit?gid=0#gid=0"
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # 2. ฟังก์ชันดึงข้อมูลและคลีนข้อมูลในตัวเดียว
