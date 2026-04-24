@@ -17,7 +17,7 @@ if "GEMINI_API_KEY" in st.secrets:
         
         # เลือกใช้รุ่น 2.5 Flash ที่คุณพบในลิสต์ (ตัวเลือก 0)
         # รุ่นนี้ฉลาดกว่า 1.5 มากและรองรับภาษาไทยได้ดีขึ้น
-        model = genai.GenerativeModel('models/gemini-2.0-flash')
+        model = genai.GenerativeModel('models/gemini-1.5-flash')
         
         # ทดสอบเรียกดูว่ารุ่นนี้พร้อมทำงานไหม
         model.generate_content("test")
