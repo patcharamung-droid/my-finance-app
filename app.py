@@ -55,16 +55,6 @@ if not df.empty:
         if not exp_df.empty:
             daily = exp_df.groupby('Date')['Amount'].sum()
             st.line_chart(daily)
-            # --- 3. ส่วน Dashboard (เพิ่มเติมตารางสรุปยอด) ---
-if not df.empty:
-    income = df[df['Type'] == 'Income']['Amount'].sum()
-    expense = df[df['Type'] == 'Expense']['Amount'].sum()
-    balance = income - expense
-
-    c1, c2, c3 = st.columns(3)
-    c1.metric("รายรับทั้งหมด", f"฿{income:,.2f}")
-    c2.metric("รายจ่ายทั้งหมด", f"฿{expense:,.2f}", delta=f"-{expense:,.2f}", delta_color="inverse")
-    c3.metric("คงเหลือสุทธิ", f"฿{balance:,.2f}")
 
     # --- ส่วนที่เพิ่มใหม่: ตารางสรุปยอดเงินแต่ละรายการ ---
     st.write("### 📑 สรุปยอดเงินแยกตามหมวดหมู่")
